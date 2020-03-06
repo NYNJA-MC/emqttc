@@ -87,7 +87,7 @@ dump_variable(undefined, _) ->
 dump_variable(Variable, undefined) ->
     dump_variable(Variable);
 dump_variable(Variable, Payload) ->
-    io_lib:format("~s, Payload=~W", [dump_variable(Variable), Payload, 32]).
+    io_lib:format("~s, Payload=~W", [dump_variable(Variable), Payload, 256]).
 
 dump_variable(#mqtt_packet_connect{
                  proto_ver     = ProtoVer,
