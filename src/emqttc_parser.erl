@@ -78,8 +78,25 @@ parse_remaining_len(<<0:1, Len:7, Rest/binary>>, Header,  Multiplier, Value) ->
         true -> parse_frame(Rest, Header, FrameLen)
     end.
 
-parse_frame(Bin, #mqtt_packet_header{type = Type,
-                                     qos  = Qos} = Header, Length) ->
+parse_frame(Bin, Header, FrameLen) ->
+    parse_frame(Bin, Header, FrameLen, 0, []).
+
+%% Until we have received enough data to parse the frame we refrain from
+%% assembling the full binary.
+parse_frame(Bin, Header, FrameLen, AccLen, AccBin) ->
+    BSize = byte_size(Bin),
+    case AccLen + BSize >= FrameLen of
+        false ->
+            {more, fun(BinMore) ->
+                       parse_frame(BinMore, Header, FrameLen,
+                                   AccLen + BSize, [Bin | AccBin])
+                   end};
+        true ->
+            WholeBin = iolist_to_binary(lists:reverse([Bin | AccBin])),
+            parse_frame_(WholeBin, Header, FrameLen)
+    end.
+
+parse_frame_(Bin, #mqtt_packet_header{type = Type, qos = Qos} = Header, Length) ->
     case {Type, Bin} of
         %{?CONNECT, <<FrameBin:Length/binary, Rest/binary>>} ->
         %    {ProtoName, Rest1} = parse_utf(FrameBin),
@@ -168,15 +185,10 @@ parse_frame(Bin, #mqtt_packet_header{type = Type,
         %    wrap(Header, Rest);
         {?PINGRESP, Rest} ->
             Length = 0,
-            wrap(Header, Rest);
+            wrap(Header, Rest)
         %{?DISCONNECT, Rest} ->
         %    Length = 0,
         %    wrap(Header, Rest);
-        {_, TooShortBin} ->
-            {more, fun(BinMore) ->
-                parse_frame(<<TooShortBin/binary, BinMore/binary>>,
-                    Header, Length)
-            end}
     end.
 
 wrap(Header, Variable, Payload, Rest) ->
